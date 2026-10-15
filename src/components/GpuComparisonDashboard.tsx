@@ -1,9 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { GpuOffer, GpuPriceSummary, StoreName } from '../types/gpu';
+import type { GpuOffer, GpuPriceSummary } from '../types/gpu';
+import { useFavoritesAndAlerts } from '../hooks/useFavoritesAndAlerts';
+import { AlertBanner } from './AlertBanner';
 import { GpuCard } from './GpuCard';
 import { GpuFilterBar, storeOptions, type PriceRange } from './GpuFilterBar';
+import { PriceAlertModal } from './PriceAlertModal';
 import { PriceSummaryBanner } from './PriceSummaryBanner';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -49,21 +52,29 @@ export function GpuComparisonDashboard({
   initialSummary,
 }: GpuComparisonDashboardProps) {
   const priceBounds = useMemo(() => getPriceBounds(initialOffers), [initialOffers]);
-  const [selectedStores, setSelectedStores] = useState<StoreName[]>([...storeOptions]);
+  const {
+    favoriteStores,
+    targetPrice,
+    isSubscribed,
+    updateFavoriteStores,
+    saveAlert,
+    disableAlert,
+  } = useFavoritesAndAlerts();
   const [minPrice, setMinPrice] = useState(priceBounds.minPrice);
   const [maxPrice, setMaxPrice] = useState(priceBounds.maxPrice);
   const [inStockOnly, setInStockOnly] = useState(false);
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
 
   const filteredOffers = useMemo(
     () =>
       initialOffers.filter(
         (offer) =>
-          selectedStores.includes(offer.store) &&
+          favoriteStores.includes(offer.store) &&
           offer.priceHuf >= minPrice &&
           offer.priceHuf <= maxPrice &&
           (!inStockOnly || offer.inStock),
       ),
-    [initialOffers, inStockOnly, maxPrice, minPrice, selectedStores],
+    [favoriteStores, initialOffers, inStockOnly, maxPrice, minPrice],
   );
 
   const filteredSummary = useMemo(() => summarizeOffers(filteredOffers), [filteredOffers]);
@@ -71,7 +82,7 @@ export function GpuComparisonDashboard({
     !inStockOnly &&
     minPrice === priceBounds.minPrice &&
     maxPrice === priceBounds.maxPrice &&
-    selectedStores.length === storeOptions.length;
+    favoriteStores.length === storeOptions.length;
   const visibleSummary = isInitialView ? initialSummary ?? filteredSummary : filteredSummary;
 
   const handlePriceRangeChange = (range: PriceRange) => {
@@ -80,7 +91,7 @@ export function GpuComparisonDashboard({
   };
 
   const handleReset = () => {
-    setSelectedStores([...storeOptions]);
+    updateFavoriteStores([...storeOptions]);
     setMinPrice(priceBounds.minPrice);
     setMaxPrice(priceBounds.maxPrice);
     setInStockOnly(false);
@@ -92,8 +103,21 @@ export function GpuComparisonDashboard({
         <p aria-live="polite">
           {filteredOffers.length} ajánlat látható a {initialOffers.length} összes ajánlatból
         </p>
-        <ThemeToggle />
+        <div className="toolbar-actions">
+          <button className="alert-button" type="button" onClick={() => setIsAlertModalOpen(true)}>
+            {targetPrice === null ? 'Célár beállítása' : 'Célár módosítása'}
+          </button>
+          <ThemeToggle />
+        </div>
       </div>
+
+      <AlertBanner
+        isSubscribed={isSubscribed}
+        offers={initialOffers}
+        onDisable={disableAlert}
+        onEdit={() => setIsAlertModalOpen(true)}
+        targetPrice={targetPrice}
+      />
 
       <GpuFilterBar
         inStockOnly={inStockOnly}
@@ -102,9 +126,9 @@ export function GpuComparisonDashboard({
         onInStockOnlyChange={setInStockOnly}
         onPriceRangeChange={handlePriceRangeChange}
         onReset={handleReset}
-        onStoresChange={setSelectedStores}
+        onStoresChange={updateFavoriteStores}
         priceBounds={priceBounds}
-        selectedStores={selectedStores}
+        selectedStores={favoriteStores}
       />
 
       <PriceSummaryBanner summary={visibleSummary} visibleOfferCount={filteredOffers.length} />
@@ -121,6 +145,13 @@ export function GpuComparisonDashboard({
           <p>Állíts vissza egy szűrőt, vagy válassz szélesebb ártartományt.</p>
         </div>
       )}
+
+      <PriceAlertModal
+        open={isAlertModalOpen}
+        onClose={() => setIsAlertModalOpen(false)}
+        onSave={saveAlert}
+        targetPrice={targetPrice}
+      />
     </section>
   );
 }
